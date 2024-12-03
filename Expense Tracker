@@ -1,0 +1,190 @@
+import os
+import csv
+import customtkinter as ctk
+from tkinter import ttk
+from tkcalendar import Calendar
+from tkinter import messagebox, filedialog, simpledialog
+
+# Initialize customtkinter
+ctk.set_appearance_mode("black")
+ctk.set_default_color_theme("dark-blue")
+
+# Create the main application window
+root = ctk.CTk()
+root.title("Expense Tracker")
+
+def open_date_picker():
+    # open a calendar to pick a date
+    def select_date():
+        date_entry.delete(0, ctk.END)
+        date_entry.insert(0, cal.get_date())
+        date_picker_window.destroy()
+
+    date_picker_window = ctk.CTkToplevel(root)
+    date_picker_window.title("Select Date")
+    cal = Calendar(date_picker_window, date_pattern="yyyy-mm-dd")
+    cal.pack(padx=10, pady=10)
+    select_button = ctk.CTkButton(date_picker_window, text="Select", command=select_date)
+    select_button.pack(pady=5)
+
+def add_expense():
+    date = date_entry.get()
+    category = category_combobox.get()  # Get selected category
+    amount = amount_entry.get()
+
+    if date and category != "Select Category" and amount:
+        try:
+            with open("expenses.csv", "a", newline="") as file:
+                writer = csv.writer(file)
+                writer.writerow([date, category, amount])
+            status_label.configure(text="Expense added successfully!", text_color="green")
+            date_entry.delete(0, ctk.END)
+            category_combobox.set("Select Category")  # Reset the dropdown
+            amount_entry.delete(0, ctk.END)
+            view_expenses()
+        except Exception as e:
+            status_label.configure(text=f"Error: {e}", text_color="red")
+    else:
+        status_label.configure(text="Please fill all the fields!", text_color="red")
+
+def delete_expense():
+    selected_item = expenses_tree.selection()
+    if selected_item:
+        item_text = expenses_tree.item(selected_item, "values")
+        date, category, amount = item_text
+        try:
+            with open("expenses.csv", "r") as file:
+                rows = list(csv.reader(file))
+            with open("expenses.csv", "w", newline="") as file:
+                writer = csv.writer(file)
+                for row in rows:
+                    if row != [date, category, amount]:
+                        writer.writerow(row)
+            status_label.configure(text="Expense deleted successfully!", text_color="green")
+            view_expenses()
+        except Exception as e:
+            status_label.configure(text=f"Error: {e}", text_color="red")
+    else:
+        status_label.configure(text="Please select an expense to delete!", text_color="red")
+
+def view_expenses():
+    try:
+        if os.path.exists("expenses.csv"):
+            total_expense = 0
+            expenses_tree.delete(*expenses_tree.get_children())  # Clear current data
+            with open("expenses.csv", "r") as file:
+                reader = csv.reader(file)
+                for row in reader:
+                    if len(row) == 3:  # Skip empty rows
+                        date, category, amount = row
+                        expenses_tree.insert("", "end", values=(date, category, amount))
+                        total_expense += float(amount)
+            total_label.configure(text=f"Total Expense: {total_expense:.2f}")
+            if budget:
+                remaining_balance = budget - total_expense
+                remaining_label.configure(text=f"Remaining Balance: {remaining_balance:.2f}")
+        else:
+            total_label.configure(text="No expenses recorded.")
+            expenses_tree.delete(*expenses_tree.get_children())  # Clear treeview if no file
+    except Exception as e:
+        total_label.configure(text=f"Error: {e}")
+
+def set_budget():
+    global budget
+    try:
+        budget = int(budget_entry.get())
+        view_expenses()
+        budget_label.configure(text=f"Budget Set: {budget:.2f}")
+    except ValueError:
+        status_label.configure(text="Invalid budget value!, Please enter a digit number.", text_color="red")
+
+def save_data():
+    file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV Files", "*.csv"), ("Text Files", "*.txt")])
+
+    if file_path:
+        try:
+            # Retrieve all data from the Treeview widget
+            rows = expenses_tree.get_children()
+            data = [expenses_tree.item(row, "values") for row in rows]
+
+            # Save data to the selected file
+            with open(file_path, 'w', newline="") as file:
+                writer = csv.writer(file)
+                writer.writerow(["Date", "Category", "Amount"])  # Header
+                writer.writerows(data)
+
+            messagebox.showinfo("Success", f"Expenses saved to {file_path}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save file: {str(e)}")
+
+
+
+# Budget Input
+budget_label = ctk.CTkLabel(root, text="Set Budget:")
+budget_label.grid(row=0, column=0, padx=5, pady=5)
+budget_entry = ctk.CTkEntry(root)
+budget_entry.grid(row=0, column=1, padx=5, pady=5)
+set_budget_button = ctk.CTkButton(root, text="Set Budget", command=set_budget)
+set_budget_button.grid(row=0, column=2, padx=5, pady=5)
+
+# Expense Input
+date_label = ctk.CTkLabel(root, text="Date (YYYY-MM-DD):")
+date_label.grid(row=1, column=0, padx=5, pady=5)
+date_entry = ctk.CTkEntry(root)
+date_entry.grid(row=1, column=1, padx=5, pady=5)
+date_picker_button = ctk.CTkButton(root, text="Pick Date", command=open_date_picker)
+date_picker_button.grid(row=1, column=2, padx=5, pady=5)
+
+# Category Dropdown
+category_label = ctk.CTkLabel(root, text="Category:")
+category_label.grid(row=2, column=0, padx=5, pady=5)
+categories = ["Food/Drink", "Rent", "Transport", "Utilities", "Entertainment", "Health", "Others"]
+category_combobox = ttk.Combobox(root, values=categories, state="readonly")
+category_combobox.grid(row=2, column=1, padx=5, pady=5)
+category_combobox.set("Select Category")  # Default placeholder text
+
+# Amount Input
+amount_label = ctk.CTkLabel(root, text="Amount:")
+amount_label.grid(row=3, column=0, padx=5, pady=5)
+amount_entry = ctk.CTkEntry(root)
+amount_entry.grid(row=3, column=1, padx=5, pady=5)
+
+add_button = ctk.CTkButton(root, text="Add Expense", command=add_expense)
+add_button.grid(row=4, column=0, columnspan=3, padx=5, pady=10)
+
+# Expense Treeview
+columns = ("Date", "Category", "Amount")
+expenses_tree = ttk.Treeview(root, columns=columns, show="headings")
+expenses_tree.heading("Date", text="Date")
+expenses_tree.heading("Category", text="Category")
+expenses_tree.heading("Amount", text="Amount")
+expenses_tree.grid(row=5, column=0, columnspan=3, padx=5, pady=5)
+
+# Labels for total and remaining balance
+total_label = ctk.CTkLabel(root, text="")
+total_label.grid(row=6, column=0, columnspan=3, padx=5, pady=5)
+remaining_label = ctk.CTkLabel(root, text="")
+remaining_label.grid(row=7, column=0, columnspan=3, padx=5, pady=5)
+
+# Status Label
+status_label = ctk.CTkLabel(root, text=" ", text_color="green")
+status_label.grid(row=8, column=0, columnspan=3, padx=5, pady=5)
+
+# Buttons to view and delete expenses
+delete_button = ctk.CTkButton(root, text="Delete Expense", command=delete_expense)
+delete_button.grid(row=9, column=0, columnspan= 2,  padx=5, pady=10)
+save_button = ctk.CTkButton(root, text="Save Data", command=save_data)
+save_button.grid(row=9, column=1,columnspan= 3, padx=5, pady=5)
+
+# Check if the 'expenses.csv' file exists; create it if it doesn't
+if not os.path.exists("expenses.csv"):
+    with open("expenses.csv", "w", newline="") as file:
+        pass
+
+# Initialize budget
+budget = 0
+
+# Display existing expenses on application start
+view_expenses()
+
+root.mainloop()
